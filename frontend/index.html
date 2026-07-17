@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Madhubani Art - 3 Tier Docker Project</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="logo" href="#home">MADHUBANI ART</a>
+    <div class="nav-links">
+      <a href="#home">Home</a>
+      <a href="#gallery">Gallery</a>
+      <a href="#reviews">Reviews</a>
+    </div>
+  </nav>
+
+  <header id="home" class="hero">
+    <p class="eyebrow">Docker three-tier learning project</p>
+    <h1>Tradition served by Nginx, Node.js and MySQL</h1>
+    <p>The browser talks only to Nginx. Nginx serves this frontend and forwards <code>/api</code> requests to the backend.</p>
+    <div id="api-status" class="status">Checking backend...</div>
+  </header>
+
+  <main>
+    <section id="gallery">
+      <h2>Madhubani Gallery</h2>
+      <div class="image-gallery">
+        <figure><img src="images/360_F_932022123_UAlFyNvOUlYwV2mOxSrmGJp1sm9wygc3.webp" alt="Madhubani portrait"><figcaption>Floral Grace</figcaption></figure>
+        <figure><img src="images/360_F_1004818785_soIlnEGJjad3bUDPHTMY46qLFTzDvro9.webp" alt="Colourful Madhubani portrait"><figcaption>Colours of Mithila</figcaption></figure>
+        <figure><img src="images/b15a960a-948d-4359-8e2d-da1deb0167ad.jpg" alt="Madhubani folk art"><figcaption>Folk Stories</figcaption></figure>
+        <figure><img src="images/240_F_977007982_qtgett4EB0WrczMfJG8xp2FYiz2Z5nFW.jpg" alt="Radha Krishna Madhubani painting"><figcaption>Radha Krishna</figcaption></figure>
+        <figure><img src="images/m1.webp" alt="Traditional couple"><figcaption>Divine Couple</figcaption></figure>
+        <figure><img src="images/m2.webp" alt="Woman in blue veil"><figcaption>Blue Veil</figcaption></figure>
+        <figure><img src="images/m3.webp" alt="Woman with peacock"><figcaption>Peacock Beauty</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="reviews" class="reviews-section">
+      <div>
+        <p class="eyebrow">Database-backed feature</p>
+        <h2>Visitor Reviews</h2>
+        <p>Submitting this form sends JSON to the Node.js API. The API saves it in MySQL. Refreshing or recreating containers will not remove records because MySQL uses a named volume.</p>
+      </div>
+
+      <form id="review-form">
+        <label>Name<input id="name" name="name" maxlength="80" required></label>
+        <label>Message<textarea id="message" name="message" maxlength="500" required></textarea></label>
+        <button type="submit">Save review</button>
+        <p id="form-message" aria-live="polite"></p>
+      </form>
+
+      <div id="review-list" class="review-list"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
