@@ -11,7 +11,7 @@ on:
 
 jobs:
   frontend-ci:
-    name: Validate Frontend
+    name: Frontend chal raha hai
     runs-on: ubuntu-latest
 
     steps:
@@ -30,7 +30,7 @@ jobs:
         run: node --check frontend/app.js
 
   backend-ci:
-    name: Validate Backend
+    name: Backend chal raha hai
     runs-on: ubuntu-latest
 
     defaults:

@@ -17,12 +17,12 @@ services:
     mem_limit: 512m
     cpus: 1.0
     environment:
-      PORT: 3000
-      DB_HOST: database
-      DB_PORT: 3306
-      DB_USER: madhubani_user
-      DB_PASSWORD: madhubani_password
-      DB_NAME: madhubani_db
+      PORT: ${PORT}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE}
     depends_on:
       database:
         condition: service_healthy
@@ -46,10 +46,10 @@ services:
   database:
     image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: root_password_change_me
-      MYSQL_DATABASE: madhubani_db
-      MYSQL_USER: madhubani_user
-      MYSQL_PASSWORD: madhubani_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
