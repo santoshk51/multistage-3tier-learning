@@ -69,3 +69,108 @@ volumes:
 networks:
   frontend-network:
   backend-network:
+
+
+
+
+
+
+
+
+
+
+# services:
+#   frontend:
+#     image: santosh051/madhubani-frontend:${FRONTEND_TAG}
+#     container_name: madhubani-frontend
+#     ports:
+#       - "${FRONTEND_HOST_PORT}:80"
+#     depends_on:
+#       backend:
+#         condition: service_healthy
+#     networks:
+#       - frontend-network
+#     healthcheck:
+#       test:
+#         [
+#           "CMD-SHELL",
+#           "wget --quiet --tries=1 --spider http://127.0.0.1/ || exit 1"
+#         ]
+#       interval: 30s
+#       timeout: 5s
+#       retries: 3
+#       start_period: 10s
+#     restart: unless-stopped
+
+# #BACKEND
+#   backend:
+#     image: santosh051/madhubani-backend:${BACKEND_TAG}
+#     container_name: madhubani-backend
+#     ports:
+#       - "${BACKEND_HOST_PORT}:${APP_PORT}"
+#     environment:
+#       PORT: ${APP_PORT}
+#       DB_HOST: ${DB_HOST}
+#       DB_PORT: ${DB_PORT}
+#       DB_USER: ${MYSQL_USER}
+#       DB_PASSWORD: ${MYSQL_PASSWORD}
+#       DB_NAME: ${MYSQL_DATABASE}
+#     depends_on:
+#       database:
+#         condition: service_healthy
+#     networks:
+#       - frontend-network
+#       - backend-network
+#     healthcheck:
+#       test: 
+#         [
+#          "CMD",
+#           "node",
+#           "-e",
+#           "fetch('http://127.0.0.1:3000/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+#         ]
+#       interval: 20s
+#       timeout: 5s
+#       retries: 5
+#       start_period: 20s
+#     restart: unless-stopped
+
+# #DB
+#   database:
+#     image: mysql:8.4
+#     container_name: madhubani-database
+#     environment:
+#       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+#       MYSQL_DATABASE: ${MYSQL_DATABASE}
+#       MYSQL_USER: ${MYSQL_USER}
+#       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+#     volumes:
+#       - mysql-data:/var/lib/mysql
+#     networks:
+#       - backend-network
+#     healthcheck:
+#       test: 
+#         [
+#           "CMD-SHELL",
+#           "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"
+#         ]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#       start_period: 30s
+#     restart: unless-stopped
+
+# #NETWORKS DEPENDENCIES
+# networks:
+#   frontend-network:
+#     driver: bridge
+#   backend-network:
+#     driver: bridge
+#     internal: true
+
+# #VOLUME DEPENDENCIES
+# volumes:
+#   mysql-data:
+#     driver: local
+  
+
