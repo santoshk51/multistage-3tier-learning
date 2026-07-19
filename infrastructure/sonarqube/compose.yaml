@@ -1,0 +1,125 @@
+  # sonarqube:
+  #   # Run static code quality and security analysis
+  #   name: SonarQube Analysis
+
+  #   # Start only after basic frontend and backend validation succeeds
+  #   needs: validate
+
+  #   # GitHub creates a temporary Ubuntu runner
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - name: Checkout repository
+  #       # Download the complete repository into the runner
+  #       uses: actions/checkout@v4
+  #       with:
+  #         # Full history improves new-code and blame information
+  #         fetch-depth: 0
+
+  #     - name: Run SonarQube scan
+  #       # Official SonarSource scanning action
+  #       uses: SonarSource/sonarqube-scan-action@v6
+  #       env:
+  #         # Token authenticates the analysis
+  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  #         # URL of the reachable SonarQube instance
+  #         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  #     - name: Check SonarQube Quality Gate
+  #       # Prevent later jobs when the Quality Gate fails
+  #       uses: SonarSource/sonarqube-quality-gate-action@v1
+  #       timeout-minutes: 5
+  #       env:
+  #         # Token used to retrieve the analysis result
+  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  #         # SonarQube server queried for Quality Gate status
+  #         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+
+services:
+  postgres:
+    # PostgreSQL stores SonarQube configuration and scan results
+    image: postgres:17-alpine
+
+    # Readable container name
+    container_name: madhubani-sonar-postgres
+
+    environment:
+      # These values are loaded from the .env file
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    volumes:
+      # Keep database data even if the container is removed
+      - sonar-postgres-data:/var/lib/postgresql/data
+
+    networks:
+      # Private network shared with SonarQube
+      - sonar-network
+
+    healthcheck:
+      # Check whether PostgreSQL is ready
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+    restart: unless-stopped
+
+  sonarqube:
+    # SonarQube Community image
+    image: sonarqube:community
+
+    # Readable container name
+    container_name: madhubani-sonarqube
+
+    depends_on:
+      postgres:
+        # Start SonarQube after PostgreSQL becomes healthy
+        condition: service_healthy
+
+    environment:
+      # SonarQube connects to the postgres service using this URL
+      SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+
+      # Database username
+      SONAR_JDBC_USERNAME: ${POSTGRES_USER}
+
+      # Database password
+      SONAR_JDBC_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      # Host port 9000 maps to SonarQube container port 9000
+      - "${SONARQUBE_PORT}:9000"
+
+    volumes:
+      # Store SonarQube application data
+      - sonarqube-data:/opt/sonarqube/data
+
+      # Store extensions and plugins
+      - sonarqube-extensions:/opt/sonarqube/extensions
+
+      # Store SonarQube logs
+      - sonarqube-logs:/opt/sonarqube/logs
+
+    networks:
+      - sonar-network
+
+    restart: unless-stopped
+
+networks:
+  sonar-network:
+    driver: bridge
+
+volumes:
+  sonar-postgres-data:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:
