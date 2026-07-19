@@ -98,3 +98,24 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+         host: ${{ secrets.SSH_HOST }}
+         username: ubuntu
+         key: ${{ secrets.SSH_KEY }}
+         script: |
+            cd /home/ubuntu/node
+            git pull origin main
+            npm install
+            npm run build
+            pm2 restart all
