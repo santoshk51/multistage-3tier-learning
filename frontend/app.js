@@ -11,7 +11,7 @@ async function checkApi() {
     statusBox.textContent = `Backend: ${data.api} | Database: ${data.database}`;
     statusBox.className = 'status ok';
   } catch (error) {
-    statusBox.textContent = 'Backend or database is unavailable';
+    statusBox.textContent = 'Backend or database is unavailable!!';
     statusBox.className = 'status error';
   }
 }
