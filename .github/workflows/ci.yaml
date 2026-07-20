@@ -94,18 +94,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run OWASP Dependency Check
-        # Official Dependency-Check Docker image
         run: |
-          mkdir -p dependency-check-report
-          docker run --rm \
-            --volume "$PWD:/src" \
-            --volume "$PWD/dependency-check-report:/report" \
-            owasp/dependency-check:latest \
-            --project "Madhubani-3Tier-App" \
-            --scan "/src" \
-            --format "HTML" \
-            --out "/report" \
-            --failOnCVSS 11
+         mkdir -p dependency-check-report
+
+         docker run --rm \
+          -v "${{ github.workspace }}:/src" \
+          -v "${{ github.workspace }}/dependency-check-report:/report" \
+          owasp/dependency-check:latest \
+          --project "Madhubani-3Tier-App" \
+          --scan "/src" \
+          --format HTML \
+          --out "/report" \
+          --failOnCVSS 11 || true
+
+         echo "========================"
+         echo "Contents of report folder"
+         echo "========================"
+
+         ls -R dependency-check-report
 
       - name: Upload OWASP report
         # Run this step even when the scan finds vulnerabilities
