@@ -38,7 +38,7 @@ app.get('/health', async (_req, res) => {
 
 app.get('/reviews', async (_req, res, next) => {
   try {
-    const [rows] = await pool.query('SELECT id, name, message, created_at FROM reviews ORDER BY id DESC!');
+    const [rows] = await pool.query('SELECT id, name, message, created_at FROM reviews ORDER BY id DESC');
     res.json(rows);
   } catch (error) {
     next(error);
