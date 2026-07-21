@@ -79,58 +79,74 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
   owasp-dependency-check:
-    # Name shown in the GitHub Actions dashboard
+    # Name displayed in the GitHub Actions dashboard
     name: OWASP Dependency Check
 
-    # Run this job only after SonarQube finishes successfully
+    # Run after the SonarQube job succeeds
     needs: sonarqube
 
-    # GitHub-hosted Linux runner
+    # Use a GitHub-hosted Linux runner
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        # Download repository code into the runner
+        # Download the repository code
         uses: actions/checkout@v4
 
       - name: Run OWASP Dependency Check
+        # Load the encrypted GitHub secret into an environment variable
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
         run: |
-         mkdir -p dependency-check-report
+          # Create the report directory
+          mkdir -p dependency-check-report
 
-         docker run --rm \
-          -v "${{ github.workspace }}:/src" \
-          -v "${{ github.workspace }}/dependency-check-report:/report" \
-          owasp/dependency-check:latest \
-          --project "Madhubani-3Tier-App" \
-          --scan "/src" \
-          --format HTML \
-          --out "/report" \
-          --failOnCVSS 11 || true
+          if [ -z "${NVD_API_KEY}" ]; then
+            echo "ERROR: NVD_API_KEY is empty"
+            exit 1
+          else
+            echo "NVD_API_KEY is loaded successfully"
+          fi
 
-         echo "========================"
-         echo "Contents of report folder"
-         echo "========================"
+          # Run OWASP Dependency-Check
+          docker run --rm \
+            -v "${{ github.workspace }}:/src" \
+            -v "${{ github.workspace }}/dependency-check-report:/report" \
+            owasp/dependency-check:latest \
+            --project "Madhubani-3Tier-App" \
+            --scan "/src" \
+            --format HTML \
+            --out "/report" \
+            --nvdApiKey "${NVD_API_KEY}" \
+            --failOnCVSS 11 || true
 
-         ls -R dependency-check-report
+          echo "========================"
+          echo "Contents of report folder"
+          echo "========================"
+
+          # Display generated report files
+          ls -lah dependency-check-report
 
       - name: Upload OWASP report
-        # Run this step even when the scan finds vulnerabilities
+        # Upload the report even when the scanning step has problems
         if: always()
 
-        # Upload the HTML report as a GitHub Actions artifact
+        # Store the report as a GitHub Actions artifact
         uses: actions/upload-artifact@v4
 
         with:
-          # Name shown under the workflow's Artifacts section
+          # Artifact name visible in GitHub Actions
           name: owasp-dependency-check-report
 
-          # Directory created by Dependency-Check
-          path: dependency-check-report
+          # Folder containing the HTML report
+          path: dependency-check-report/
 
-          # Fail clearly if the report was not generated
+          # Show a clear error when no report exists
           if-no-files-found: error
+
+          # Keep the report for 14 days
+          retention-days: 14
 
 
   docker-build-and-push:
