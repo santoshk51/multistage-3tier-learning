@@ -78,140 +78,302 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-  owasp-dependency-check:
-    # Name displayed in the GitHub Actions dashboard
-    name: OWASP Dependency Check
+  #----------------------------------------------------------------------
+  #----------------------------------------------------------------------
 
-    # Run after the SonarQube job succeeds
-    needs: sonarqube
+  # owasp-dependency-check:
+  #   # Name displayed in the GitHub Actions dashboard
+  #   name: OWASP Dependency Check
 
-    # Use a GitHub-hosted Linux runner
+  #   # Run after the SonarQube job succeeds
+  #   needs: sonarqube
+
+  #   # Use a GitHub-hosted Linux runner
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - name: Checkout repository
+  #       # Download the repository code
+  #       uses: actions/checkout@v4
+
+  #     - name: Run OWASP Dependency Check
+  #       # Load the encrypted GitHub secret into an environment variable
+  #       env:
+  #         NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
+  #       run: |
+  #         # Create the report directory
+  #         mkdir -p dependency-check-report
+
+  #         if [ -z "${NVD_API_KEY}" ]; then
+  #           echo "ERROR: NVD_API_KEY is empty"
+  #           exit 1
+  #         else
+  #           echo "NVD_API_KEY is loaded successfully"
+  #         fi
+
+  #         # Run OWASP Dependency-Check
+  #         docker run --rm \
+  #           -v "${{ github.workspace }}:/src" \
+  #           -v "${{ github.workspace }}/dependency-check-report:/report" \
+  #           owasp/dependency-check:latest \
+  #           --project "Madhubani-3Tier-App" \
+  #           --scan "/src" \
+  #           --format HTML \
+  #           --out "/report" \
+  #           --nvdApiKey "${NVD_API_KEY}" \
+  #           --failOnCVSS 11 || true
+
+  #         echo "========================"
+  #         echo "Contents of report folder"
+  #         echo "========================"
+
+  #         # Display generated report files
+  #         ls -lah dependency-check-report
+
+  #     - name: Upload OWASP report
+  #       # Upload the report even when the scanning step has problems
+  #       if: always()
+
+  #       # Store the report as a GitHub Actions artifact
+  #       uses: actions/upload-artifact@v4
+
+  #       with:
+  #         # Artifact name visible in GitHub Actions
+  #         name: owasp-dependency-check-report
+
+  #         # Folder containing the HTML report
+  #         path: dependency-check-report/
+
+  #         # Show a clear error when no report exists
+  #         if-no-files-found: error
+
+  #         # Keep the report for 14 days
+  #         retention-days: 14
+
+  #------------------------------------------------
+  #------------------------------------------------
+
+  docker-build-scan-and-push:
+    # Name shown in GitHub Actions
+    name: Build, Scan and Push Docker Images
+
+    # Run only after OWASP Dependency-Check succeeds
+    # needs: owasp-dependency-check
+
     runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        # Download the repository code
-        uses: actions/checkout@v4
-
-      - name: Run OWASP Dependency Check
-        # Load the encrypted GitHub secret into an environment variable
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-
-        run: |
-          # Create the report directory
-          mkdir -p dependency-check-report
-
-          if [ -z "${NVD_API_KEY}" ]; then
-            echo "ERROR: NVD_API_KEY is empty"
-            exit 1
-          else
-            echo "NVD_API_KEY is loaded successfully"
-          fi
-
-          # Run OWASP Dependency-Check
-          docker run --rm \
-            -v "${{ github.workspace }}:/src" \
-            -v "${{ github.workspace }}/dependency-check-report:/report" \
-            owasp/dependency-check:latest \
-            --project "Madhubani-3Tier-App" \
-            --scan "/src" \
-            --format HTML \
-            --out "/report" \
-            --nvdApiKey "${NVD_API_KEY}" \
-            --failOnCVSS 11 || true
-
-          echo "========================"
-          echo "Contents of report folder"
-          echo "========================"
-
-          # Display generated report files
-          ls -lah dependency-check-report
-
-      - name: Upload OWASP report
-        # Upload the report even when the scanning step has problems
-        if: always()
-
-        # Store the report as a GitHub Actions artifact
-        uses: actions/upload-artifact@v4
-
-        with:
-          # Artifact name visible in GitHub Actions
-          name: owasp-dependency-check-report
-
-          # Folder containing the HTML report
-          path: dependency-check-report/
-
-          # Show a clear error when no report exists
-          if-no-files-found: error
-
-          # Keep the report for 14 days
-          retention-days: 14
-
-
-  docker-build-and-push:
-    name: Build and Push Docker Images
-    runs-on: ubuntu-latest
-
-    needs: owasp-dependency-check
-      # - frontend-ci
-      # - backend-ci
-        
 
     steps:
       - name: Checkout source code
+        # Download repository code onto the GitHub runner
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
+        # Configure Docker Buildx for image building and cache support
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
+        # Login is required only for the final push steps
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push frontend image
+      - name: Build frontend image locally
+        # Build the image and load it into the runner's Docker image store
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend # ***
-          file: ./frontend/Dockerfile # ***
-          push: true
+          context: ./frontend
+          file: ./frontend/Dockerfile
+
+          # Do not publish the image before security scanning
+          push: false
+
+          # Load the built image so Trivy can scan it locally
+          load: true
+
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push backend image
+      - name: Build backend image locally
+        # Build the backend image without publishing it
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
-          push: true
+
+          # Keep the image private until Trivy approves it
+          push: false
+
+          # Make the image available to Docker and Trivy on this runner
+          load: true
+
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
-  
-  
-  # deploy:
+
+      - name: Verify locally built images
+        # Confirm both images exist before starting security scans
+        run: |
+          echo "Images available on the runner:"
+          docker image ls
+
+      - name: Scan frontend image with Trivy
+        # Fail this step when a fixable HIGH or CRITICAL vulnerability is found
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
+
+          # Human-readable result in the GitHub Actions logs
+          format: table
+
+          # Return failure when matching vulnerabilities are detected
+          exit-code: '1'
+
+          # Scan only serious vulnerabilities
+          severity: HIGH,CRITICAL
+
+          # Do not block deployment for vulnerabilities with no available fix
+          ignore-unfixed: true
+
+          # Scan OS packages and application libraries
+          scanners: vuln
+
+      - name: Scan backend image with Trivy
+        # This scan runs only if the frontend image scan passes
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          scanners: vuln
+
+      - name: Push frontend image to Docker Hub
+        # This step runs only when both Trivy scans pass
+        run: |
+          docker push \
+            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"
+
+          docker push \
+            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest"
+
+      - name: Push backend image to Docker Hub
+        # Publish both immutable and latest backend tags
+        run: |
+          docker push \
+            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"
+
+          docker push \
+            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  # docker-build-and-push:
+  #   name: Build and Push Docker Images
   #   runs-on: ubuntu-latest
 
+  #   needs: owasp-dependency-check
+  #     # - frontend-ci
+  #     # - backend-ci
+        
+
   #   steps:
-  #     - name: Checkout code
+  #     - name: Checkout source code
   #       uses: actions/checkout@v4
 
-  #     - name: Deploy via SSH
-  #       uses: appleboy/ssh-action@v1.0.3
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v3
+
+  #     - name: Log in to Docker Hub
+  #       uses: docker/login-action@v4
   #       with:
-  #        host: ${{ secrets.SSH_HOST }}
-  #        username: ubuntu
-  #        key: ${{ secrets.SSH_KEY }}
-  #        script: |
-  #           cd /home/ubuntu/node
-  #           git pull origin main
-  #           npm install
-  #           npm run build
-  #           pm2 restart all
+  #         username: ${{ secrets.DOCKERHUB_USERNAME }}
+  #         password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  #     - name: Build and push frontend image
+  #       uses: docker/build-push-action@v6
+  #       with:
+  #         context: ./frontend # ***
+  #         file: ./frontend/Dockerfile # ***
+  #         push: true
+  #         tags: |
+  #           ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
+  #           ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest
+  #         cache-from: type=gha
+  #         cache-to: type=gha,mode=max
+
+  #     - name: Build and push backend image
+  #       uses: docker/build-push-action@v6
+  #       with:
+  #         context: ./backend
+  #         file: ./backend/Dockerfile
+  #         push: true
+  #         tags: |
+  #           ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
+  #           ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest
+  #         cache-from: type=gha
+  #         cache-to: type=gha,mode=max
+  
+  
+  # # deploy:
+  # #   runs-on: ubuntu-latest
+
+  # #   steps:
+  # #     - name: Checkout code
+  # #       uses: actions/checkout@v4
+
+  # #     - name: Deploy via SSH
+  # #       uses: appleboy/ssh-action@v1.0.3
+  # #       with:
+  # #        host: ${{ secrets.SSH_HOST }}
+  # #        username: ubuntu
+  # #        key: ${{ secrets.SSH_KEY }}
+  # #        script: |
+  # #           cd /home/ubuntu/node
+  # #           git pull origin main
+  # #           npm install
+  # #           npm run build
+  # #           pm2 restart all
