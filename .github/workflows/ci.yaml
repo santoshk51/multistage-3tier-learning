@@ -9,7 +9,11 @@ on:
     branches:
       - main
 
+
 jobs:
+  # ==========================================================
+  # 1. FRONTEND VALIDATION
+  # ==========================================================
   frontend-ci:
     name: Frontend chal raha hai
     runs-on: ubuntu-latest
@@ -20,6 +24,7 @@ jobs:
 
       - name: Verify frontend files
         run: |
+          # Stop if any required frontend file does not exist.
           test -f frontend/index.html
           test -f frontend/style.css
           test -f frontend/app.js
@@ -29,6 +34,10 @@ jobs:
       - name: Check frontend JavaScript syntax
         run: node --check frontend/app.js
 
+
+  # ==========================================================
+  # 2. BACKEND VALIDATION
+  # ==========================================================
   backend-ci:
     name: Backend chal raha hai
     runs-on: ubuntu-latest
@@ -45,7 +54,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+          # Cache npm packages to reduce future pipeline time.
           cache: npm
+
+          # package-lock.json is inside the backend folder.
           cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
@@ -53,118 +66,57 @@ jobs:
 
       - name: Check backend JavaScript syntax
         run: node --check server.js
+
+
+  # ==========================================================
+  # 3. SONARQUBE ANALYSIS
+  # ==========================================================
   sonarqube:
     name: SonarQube Analysis
     runs-on: ubuntu-latest
+
+    # SonarQube runs only when both validation jobs succeed.
     needs:
       - frontend-ci
       - backend-ci
+
     steps:
-      - name: checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:   # Downloads your frontend, backend, and configuration files
+        with:
+          # SonarQube requires complete Git history for
+          # accurate branch and blame information.
           fetch-depth: 0
 
-      - name: Run sonarqube scan
-        uses: sonarsource/sonarqube-scan-action@v6
+      - name: Run SonarQube scan
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
-          SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
-          SONAR_HOST_URL: ${{secrets.SONAR_HOST_URL}}
-          
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
       - name: Check SonarQube Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@v1
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-  #----------------------------------------------------------------------
-  #----------------------------------------------------------------------
 
-  # owasp-dependency-check:
-  #   # Name displayed in the GitHub Actions dashboard
-  #   name: OWASP Dependency Check
+  # ==========================================================
+  # 4. DOCKER BUILD, TRIVY SCAN AND PUSH
+  # ==========================================================
+  docker-build-scan-and-push:
+    name: Build, Scan and Push Docker Images
+    runs-on: ubuntu-latest
 
-  #   # Run after the SonarQube job succeeds
-  #   needs: sonarqube
+    # Run only after SonarQube succeeds.
+    needs: sonarqube
 
-  #   # Use a GitHub-hosted Linux runner
-  #   runs-on: ubuntu-latest
+    # Do not log in to Docker Hub or push images during
+    # pull-request validation.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-  #   steps:
-  #     - name: Checkout repository
-  #       # Download the repository code
-  #       uses: actions/checkout@v4
-
-  #     - name: Run OWASP Dependency Check
-  #       # Load the encrypted GitHub secret into an environment variable
-  #       env:
-  #         NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-
-  #       run: |
-  #         # Create the report directory
-  #         mkdir -p dependency-check-report
-
-  #         if [ -z "${NVD_API_KEY}" ]; then
-  #           echo "ERROR: NVD_API_KEY is empty"
-  #           exit 1
-  #         else
-  #           echo "NVD_API_KEY is loaded successfully"
-  #         fi
-
-  #         # Run OWASP Dependency-Check
-  #         docker run --rm \
-  #           -v "${{ github.workspace }}:/src" \
-  #           -v "${{ github.workspace }}/dependency-check-report:/report" \
-  #           owasp/dependency-check:latest \
-  #           --project "Madhubani-3Tier-App" \
-  #           --scan "/src" \
-  #           --format HTML \
-  #           --out "/report" \
-  #           --nvdApiKey "${NVD_API_KEY}" \
-  #           --failOnCVSS 11 || true
-
-  #         echo "========================"
-  #         echo "Contents of report folder"
-  #         echo "========================"
-
-  #         # Display generated report files
-  #         ls -lah dependency-check-report
-
-  #     - name: Upload OWASP report
-  #       # Upload the report even when the scanning step has problems
-  #       if: always()
-
-  #       # Store the report as a GitHub Actions artifact
-  #       uses: actions/upload-artifact@v4
-
-  #       with:
-  #         # Artifact name visible in GitHub Actions
-  #         name: owasp-dependency-check-report
-
-  #         # Folder containing the HTML report
-  #         path: dependency-check-report/
-
-  #         # Show a clear error when no report exists
-  #         if-no-files-found: error
-
-  #         # Keep the report for 14 days
-  #         retention-days: 14
-
-  #------------------------------------------------
-  #------------------------------------------------
-
-   docker-build-scan-and-push:
-    # Job name shown in the GitHub Actions interface.
-      name: Build, Scan and Push Docker Images
-
-    # Run only after the SonarQube job succeeds.
-      needs: sonarqube
-
-    # Use a GitHub-hosted Ubuntu runner.
-      runs-on: ubuntu-latest
-
-      steps:
+    steps:
       # ------------------------------------------------------
       # 1. DOWNLOAD REPOSITORY
       # ------------------------------------------------------
@@ -190,7 +142,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 4. BUILD FRONTEND LOCALLY
+      # 4. BUILD FRONTEND IMAGE LOCALLY
       # ------------------------------------------------------
       - name: Build frontend image locally
         uses: docker/build-push-action@v6
@@ -201,26 +153,33 @@ jobs:
           # Do not push before Trivy scanning.
           push: false
 
-          # Load the image into the local Docker image store.
+          # Load the image into the GitHub runner's
+          # local Docker image store.
           load: true
 
+          # Both tags refer to the same frontend image.
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest
 
+          # Reuse Docker layers from previous pipeline runs.
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
 
       # ------------------------------------------------------
-      # 5. BUILD BACKEND LOCALLY
+      # 5. BUILD BACKEND IMAGE LOCALLY
       # ------------------------------------------------------
       - name: Build backend image locally
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
+
+          # Do not push before security scanning.
           push: false
+
+          # Make the image available to Trivy.
           load: true
 
           tags: |
@@ -232,52 +191,74 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 6. VERIFY IMAGES
+      # 6. VERIFY LOCALLY BUILT IMAGES
       # ------------------------------------------------------
       - name: Verify locally built images
+        shell: bash
         run: |
+          # Stop immediately when any command fails.
           set -e
 
-          echo "Images available on the runner:"
+          echo "========================================"
+          echo "Docker images available on the runner"
+          echo "========================================"
+
           docker image ls
 
+          echo ""
           echo "Checking frontend image..."
 
           docker image inspect \
             "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}" \
             > /dev/null
 
-          echo "Frontend image found."
+          echo "Frontend image found successfully."
 
+          echo ""
           echo "Checking backend image..."
 
           docker image inspect \
             "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}" \
             > /dev/null
 
-          echo "Backend image found."
+          echo "Backend image found successfully."
 
 
       # ------------------------------------------------------
-      # 7. SCAN FRONTEND
+      # 7. TRIVY FRONTEND IMAGE SCAN
       # ------------------------------------------------------
       - name: Scan frontend image with Trivy
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
+          # Scan the exact image generated from this commit.
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
+
+          # Run only vulnerability scanning.
           scanners: vuln
+
+          # Scan Linux packages and application libraries.
           vuln-type: os,library
+
+          # Display only serious vulnerabilities.
           severity: HIGH,CRITICAL
+
+          # Do not include vulnerabilities for which
+          # no official fix is currently available.
           ignore-unfixed: true
+
+          # Print a readable report in workflow logs.
           format: table
-          exit-code: '0'
+
+          # Learning mode:
+          # show vulnerabilities but continue the pipeline.
+          exit-code: "0"
 
 
       # ------------------------------------------------------
-      # 8. SCAN BACKEND
+      # 8. TRIVY BACKEND IMAGE SCAN
       # ------------------------------------------------------
       - name: Scan backend image with Trivy
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
           scanners: vuln
@@ -285,37 +266,68 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: table
-          exit-code: '0'
+          exit-code: "0"
 
 
       # ------------------------------------------------------
-      # 9. PUSH FRONTEND
+      # 9. PUSH FRONTEND IMAGE
       # ------------------------------------------------------
       - name: Push frontend image to Docker Hub
+        shell: bash
         run: |
+          # Stop if either Docker push command fails.
           set -e
+
+          echo "Pushing commit-specific frontend image..."
 
           docker push \
             "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"
+
+          echo "Pushing latest frontend image..."
 
           docker push \
             "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest"
 
 
       # ------------------------------------------------------
-      # 10. PUSH BACKEND
+      # 10. PUSH BACKEND IMAGE
       # ------------------------------------------------------
       - name: Push backend image to Docker Hub
+        shell: bash
         run: |
           set -e
 
+          echo "Pushing commit-specific backend image..."
+
           docker push \
             "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"
+
+          echo "Pushing latest backend image..."
 
           docker push \
             "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest"
 
 
+      # ------------------------------------------------------
+      # 11. PIPELINE SUMMARY
+      # ------------------------------------------------------
+      - name: Print Docker pipeline summary
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "Docker pipeline completed successfully"
+          echo "========================================"
+
+          echo "Frontend image:"
+          echo "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"
+
+          echo ""
+          echo "Backend image:"
+          echo "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"
+
+          echo ""
+          echo "Trivy security gate: Learning mode"
+          echo "Trivy exit code: 0"
 
 
 
