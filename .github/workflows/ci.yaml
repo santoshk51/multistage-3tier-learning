@@ -234,6 +234,7 @@ jobs:
           # Human-readable result in the GitHub Actions logs
           format: table
 
+          
           # Return failure when matching vulnerabilities are detected
           exit-code: '0'
 
