@@ -154,21 +154,67 @@ jobs:
   #------------------------------------------------
   #------------------------------------------------
 
-        # 1. Build frontend locally
+   docker-build-scan-and-push:
+    # Job name shown in the GitHub Actions interface.
+      name: Build, Scan and Push Docker Images
+
+    # Run only after the SonarQube job succeeds.
+      needs: sonarqube
+
+    # Use a GitHub-hosted Ubuntu runner.
+      runs-on: ubuntu-latest
+
+      steps:
+      # ------------------------------------------------------
+      # 1. DOWNLOAD REPOSITORY
+      # ------------------------------------------------------
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # 2. SET UP DOCKER BUILDX
+      # ------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+
+      # ------------------------------------------------------
+      # 3. LOGIN TO DOCKER HUB
+      # ------------------------------------------------------
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+
+      # ------------------------------------------------------
+      # 4. BUILD FRONTEND LOCALLY
+      # ------------------------------------------------------
       - name: Build frontend image locally
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
+
+          # Do not push before Trivy scanning.
           push: false
+
+          # Load the image into the local Docker image store.
           load: true
+
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 2. Build backend locally
+
+      # ------------------------------------------------------
+      # 5. BUILD BACKEND LOCALLY
+      # ------------------------------------------------------
       - name: Build backend image locally
         uses: docker/build-push-action@v6
         with:
@@ -176,71 +222,98 @@ jobs:
           file: ./backend/Dockerfile
           push: false
           load: true
+
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 3. Confirm that Docker can see both images
+
+      # ------------------------------------------------------
+      # 6. VERIFY IMAGES
+      # ------------------------------------------------------
       - name: Verify locally built images
         run: |
+          set -e
+
+          echo "Images available on the runner:"
           docker image ls
 
-          docker image inspect \
-            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"
+          echo "Checking frontend image..."
 
           docker image inspect \
-            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"
+            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}" \
+            > /dev/null
 
-      # 4. Install Trivy
-      - name: Install Trivy
+          echo "Frontend image found."
+
+          echo "Checking backend image..."
+
+          docker image inspect \
+            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}" \
+            > /dev/null
+
+          echo "Backend image found."
+
+
+      # ------------------------------------------------------
+      # 7. SCAN FRONTEND
+      # ------------------------------------------------------
+      - name: Scan frontend image with Trivy
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: '0'
+
+
+      # ------------------------------------------------------
+      # 8. SCAN BACKEND
+      # ------------------------------------------------------
+      - name: Scan backend image with Trivy
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: '0'
+
+
+      # ------------------------------------------------------
+      # 9. PUSH FRONTEND
+      # ------------------------------------------------------
+      - name: Push frontend image to Docker Hub
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          set -e
 
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
-            | gpg --dearmor \
-            | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
-            | sudo tee /etc/apt/sources.list.d/trivy.list
-
-          sudo apt-get update
-          sudo apt-get install -y trivy
-
-          trivy --version
-
-      # 5. Scan frontend without blocking the pipeline
-      - name: Scan frontend Docker image
-        run: |
-          trivy image \
-            --exit-code 0 \
-            --ignore-unfixed \
-            --severity HIGH,CRITICAL \
-            --format table \
+          docker push \
             "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"
 
-      # 6. Scan backend without blocking the pipeline
-      - name: Scan backend Docker image
+          docker push \
+            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest"
+
+
+      # ------------------------------------------------------
+      # 10. PUSH BACKEND
+      # ------------------------------------------------------
+      - name: Push backend image to Docker Hub
         run: |
-          trivy image \
-            --exit-code 0 \
-            --ignore-unfixed \
-            --severity HIGH,CRITICAL \
-            --format table \
+          set -e
+
+          docker push \
             "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"
 
-      # 7. Push only after both scans execute successfully
-      - name: Push frontend images
-        run: |
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest"
-
-      - name: Push backend images
-        run: |
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest"
+          docker push \
+            "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest"
 
 
 
