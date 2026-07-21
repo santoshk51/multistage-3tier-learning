@@ -159,7 +159,7 @@ jobs:
     name: Build, Scan and Push Docker Images
 
     # Run only after OWASP Dependency-Check succeeds
-    # needs: owasp-dependency-check
+    needs: sonarqube
 
     runs-on: ubuntu-latest
 
