@@ -251,7 +251,7 @@ jobs:
 
           # Learning mode:
           # show vulnerabilities but continue the pipeline.
-          exit-code: "0"
+          exit-code: "1"
 
 
       # ------------------------------------------------------
