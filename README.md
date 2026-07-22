@@ -317,21 +317,16 @@ A running process is not always a ready application. The frontend waits for a he
 
 ---
 
-## Multi-Stage Docker Build
+##  Docker Build
 
 The backend uses dependency separation to keep the runtime image cleaner and more efficient.
 
 ```dockerfile
-FROM node:20-alpine AS dependencies
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY . /usr/share/nginx/html
+EXPOSE 80
 
-FROM node:20-alpine AS runtime
-WORKDIR /app
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY . .
-CMD ["npm", "start"]
 ```
 
 What I learned:
