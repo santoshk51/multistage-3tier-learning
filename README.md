@@ -13,10 +13,7 @@ A production-style learning project in which I designed, containerized, tested, 
 
 > **Recruiter summary:** This project demonstrates hands-on experience with Linux, Docker, multi-stage builds, Docker Compose, container networking, Nginx reverse proxying, Node.js, MySQL, persistent volumes, GitHub Actions, SonarQube, Trivy, Docker Hub, SSH-based deployment, AWS EC2, health checks, logs, and practical troubleshooting.
 
----
 
-
----
 
 ## Project Screenshots
 
