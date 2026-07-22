@@ -15,11 +15,6 @@ A production-style learning project in which I designed, containerized, tested, 
 
 ---
 
-## Live Application
-
-**Current deployment:** [http://3.88.40.50](http://3.88.40.50)
-
-The application uses an EC2 public IP. The address may change if the instance is stopped unless an Elastic IP is attached.
 
 ---
 
