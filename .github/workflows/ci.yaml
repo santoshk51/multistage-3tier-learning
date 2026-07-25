@@ -12,7 +12,7 @@ on:
 
 jobs:
   # ==========================================================
-  # 1. FRONTEND VALIDATION
+  # 1. FRONTEND VALIDATION 
   # ==========================================================
   frontend-ci:
     name: Frontend chal raha hai
