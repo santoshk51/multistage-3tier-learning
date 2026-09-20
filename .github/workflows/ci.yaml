@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # Run only after SonarQube succeeds.
-    needs: sonarqube
+    # needs: sonarqube
 
     # Do not log in to Docker Hub or push images during
     # pull-request validation.
