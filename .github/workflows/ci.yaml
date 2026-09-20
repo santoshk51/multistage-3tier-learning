@@ -353,7 +353,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: "docker-compose.yml"
+          source: "compose.yaml"
           target: "/home/ubuntu/madhubani-app"
 
       - name: Deploy latest images to EC2
