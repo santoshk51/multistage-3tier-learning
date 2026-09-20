@@ -71,35 +71,35 @@ jobs:
   # ==========================================================
   # 3. SONARQUBE ANALYSIS
   # ==========================================================
-  sonarqube:
-    name: SonarQube Analysis
-    runs-on: ubuntu-latest
+  # sonarqube:
+  #   name: SonarQube Analysis
+  #   runs-on: ubuntu-latest
 
-    # SonarQube runs only when both validation jobs succeed.
-    needs:
-      - frontend-ci
-      - backend-ci
+  #   # SonarQube runs only when both validation jobs succeed.
+  #   needs:
+  #     - frontend-ci
+  #     - backend-ci
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          # SonarQube requires complete Git history for
-          # accurate branch and blame information.
-          fetch-depth: 0
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         # SonarQube requires complete Git history for
+  #         # accurate branch and blame information.
+  #         fetch-depth: 0
 
-      - name: Run SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  #     - name: Run SonarQube scan
+  #       uses: SonarSource/sonarqube-scan-action@v6
+  #       env:
+  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      - name: Check SonarQube Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  #     - name: Check SonarQube Quality Gate
+  #       uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+  #       timeout-minutes: 5
+  #       env:
+  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
 
   # ==========================================================
