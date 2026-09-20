@@ -1,9 +1,6 @@
-#----------------------------------------
-# Frontend 
-#----------------------------------------
 services:
   frontend:
-    build: ./frontend # build tells Docker Compose to build an image using a Dockerfile.
+    image: santosh051/madhubani-frontend:latest
     ports:
       - "8080:80"
     depends_on:
@@ -14,11 +11,9 @@ services:
     mem_limit: 128m
     cpus: 0.5
     restart: unless-stopped
-#-------------------------------------
-# Backend
-#-------------------------------------
+
   backend:
-    build: ./backend
+    image: santosh051/madhubani-backend:latest
     mem_limit: 512m
     cpus: 1.0
     environment:
@@ -34,11 +29,11 @@ services:
     healthcheck:
       test:
         [
-         "CMD",
-         "node",
-         "-e",
-         "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
-      ]
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -47,9 +42,7 @@ services:
       - frontend-network
       - backend-network
     restart: unless-stopped
-#----------------------------------
-# Database
-#----------------------------------
+
   database:
     image: mysql:8.4
     environment:
@@ -69,16 +62,10 @@ services:
     mem_limit: 1g
     cpus: 2.0
     restart: unless-stopped
-#-------------------------------------
-# Volume
-#-------------------------------------
+
 volumes:
   mysql-data:
 
-#-------------------------------------
-# Networks
-#-------------------------------------
 networks:
   frontend-network:
   backend-network:
-
