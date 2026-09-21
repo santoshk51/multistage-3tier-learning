@@ -11,28 +11,34 @@ on:
 
 
 jobs:
+
   # ==========================================================
-  # 1. FRONTEND VALIDATION 
+  # 1. FRONTEND VALIDATION
   # ==========================================================
   frontend-ci:
     name: Frontend chal raha hai
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout source code
         uses: actions/checkout@v4
 
       - name: Verify frontend files
         run: |
-          # Stop if any required frontend file does not exist.
+          set -e
+
           test -f frontend/index.html
           test -f frontend/style.css
           test -f frontend/app.js
           test -f frontend/nginx.conf
           test -f frontend/Dockerfile
 
+          echo "All required frontend files are present."
+
       - name: Check frontend JavaScript syntax
-        run: node --check frontend/app.js
+        run: |
+          node --check frontend/app.js
 
 
   # ==========================================================
@@ -47,6 +53,7 @@ jobs:
         working-directory: backend
 
     steps:
+
       - name: Checkout source code
         uses: actions/checkout@v4
 
@@ -54,18 +61,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-
-          # Cache npm packages to reduce future pipeline time.
           cache: npm
-
-          # package-lock.json is inside the backend folder.
           cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
-        run: npm ci
+        run: |
+          npm ci
 
       - name: Check backend JavaScript syntax
-        run: node --check server.js
+        run: |
+          node --check server.js
 
 
   # ==========================================================
@@ -73,18 +78,21 @@ jobs:
   # ==========================================================
   sonarqube:
     name: SonarQube Analysis
-    runs-on: self-hosted        # <-- changed from ubuntu-latest
+
+    # Runs on the Ubuntu VM self-hosted runner
+    runs-on: self-hosted
 
     needs:
       - frontend-ci
       - backend-ci
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
- 
+
       - name: Run SonarQube scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
@@ -104,25 +112,28 @@ jobs:
   # ==========================================================
   docker-build-scan-and-push:
     name: Build, Scan and Push Docker Images
+
     runs-on: ubuntu-latest
 
-    # Run only after SonarQube succeeds.
-    needs: sonarqube
+    needs:
+      - sonarqube
 
-    # Do not log in to Docker Hub or push images during
-    # pull-request validation.
+    # Only build and push Docker images on pushes to main.
+    # Pull requests will run frontend/backend/SonarQube validation
+    # but will not push images to Docker Hub.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
+
       # ------------------------------------------------------
-      # 1. DOWNLOAD REPOSITORY
+      # 1. CHECKOUT REPOSITORY
       # ------------------------------------------------------
       - name: Checkout source code
         uses: actions/checkout@v4
 
- 
+
       # ------------------------------------------------------
-      # 2. SET UP DOCKER BUILDX 
+      # 2. SET UP DOCKER BUILDX
       # ------------------------------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -139,7 +150,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 4. BUILD FRONTEND IMAGE LOCALLY
+      # 4. BUILD FRONTEND IMAGE
       # ------------------------------------------------------
       - name: Build frontend image locally
         uses: docker/build-push-action@v6
@@ -150,22 +161,19 @@ jobs:
           # Do not push before Trivy scanning.
           push: false
 
-          # Load the image into the GitHub runner's
-          # local Docker image store.
+          # Load image into local Docker image store.
           load: true
 
-          # Both tags refer to the same frontend image.
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest
 
-          # Reuse Docker layers from previous pipeline runs.
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
 
       # ------------------------------------------------------
-      # 5. BUILD BACKEND IMAGE LOCALLY
+      # 5. BUILD BACKEND IMAGE
       # ------------------------------------------------------
       - name: Build backend image locally
         uses: docker/build-push-action@v6
@@ -173,10 +181,10 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
 
-          # Do not push before security scanning.
+          # Do not push before Trivy scanning.
           push: false
 
-          # Make the image available to Trivy.
+          # Load image into local Docker image store.
           load: true
 
           tags: |
@@ -193,7 +201,6 @@ jobs:
       - name: Verify locally built images
         shell: bash
         run: |
-          # Stop immediately when any command fails.
           set -e
 
           echo "========================================"
@@ -227,27 +234,15 @@ jobs:
       - name: Scan frontend image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          # Scan the exact image generated from this commit.
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
-
-          # Run only vulnerability scanning.
           scanners: vuln
-
-          # Scan Linux packages and application libraries.
           vuln-type: os,library
-
-          # Display only serious vulnerabilities.
           severity: HIGH,CRITICAL
-
-          # Do not include vulnerabilities for which
-          # no official fix is currently available.
           ignore-unfixed: true
-
-          # Print a readable report in workflow logs.
           format: table
 
           # Learning mode:
-          # show vulnerabilities but continue the pipeline.
+          # vulnerabilities are displayed but do not stop pipeline.
           exit-code: "0"
 
 
@@ -265,13 +260,13 @@ jobs:
           format: table
           exit-code: "0"
 
+
       # ------------------------------------------------------
       # 9. PUSH FRONTEND IMAGE
       # ------------------------------------------------------
       - name: Push frontend image to Docker Hub
         shell: bash
         run: |
-          # Stop if either Docker push command fails.
           set -e
 
           echo "Pushing commit-specific frontend image..."
@@ -314,6 +309,7 @@ jobs:
           echo "Docker pipeline completed successfully"
           echo "========================================"
 
+          echo ""
           echo "Frontend image:"
           echo "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"
 
@@ -326,86 +322,312 @@ jobs:
           echo "Trivy exit code: 0"
 
 
-
- 
-    # ------------------------------------------------------
-    # 5. DEPLOYING TO UBUNTU VM
-    # ------------------------------------------------------
+  # ==========================================================
+  # 5. DEPLOY TO UBUNTU VM
+  # ==========================================================
+  #
+  # IMPORTANT:
+  #
+  # This job runs directly inside your Ubuntu VM because
+  # the VM has the GitHub Actions self-hosted runner.
+  #
+  # There is NO SSH.
+  # There is NO SCP.
+  # There is NO EC2_HOST.
+  # There is NO EC2_SSH_KEY.
+  #
+  # The runner user is "santosh", as shown by your
+  # GitHub Actions runner path:
+  #
+  # /home/santosh/actions-runner/
+  #
+  # Therefore $HOME is used instead of hard-coding
+  # /home/santoshbhai.
+  #
+  # ==========================================================
   deploy-to-ubuntu-vm:
-      name: Deploy Application to Ubuntu VM
+    name: Deploy Application to Ubuntu VM
 
-      needs: docker-build-scan-and-push
+    needs:
+      - docker-build-scan-and-push
 
-      # This job runs directly on your Ubuntu VM
-      # through the self-hosted GitHub Actions runner.
-      runs-on: self-hosted
+    runs-on: self-hosted
 
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-      steps:
+    steps:
 
-        # ------------------------------------------------------
-        # 1. CHECKOUT REPOSITORY
-        # ------------------------------------------------------
-        - name: Checkout repository
-          uses: actions/checkout@v4
-
-        # ------------------------------------------------------
-        # 2. PREPARE APPLICATION DIRECTORY
-        # ------------------------------------------------------
-        - name: Prepare application directory
-          run: |
-            set -e
-
-            echo "Creating application directory..."
-
-            sudo mkdir -p /home/santoshbhai/madhubani-app
-
-            sudo cp compose.yaml \
-              /home/santoshbhai/madhubani-app/compose.yaml
-
-            sudo chown -R santoshbhai:santoshbhai \
-              /home/santoshbhai/madhubani-app
-
-        # ------------------------------------------------------
-        # 3. DEPLOY LATEST DOCKER IMAGES
-        # ------------------------------------------------------
-        - name: Deploy latest images
-          run: |
-            set -e
-
-            echo "======================================"
-            echo "Starting Madhubani deployment"
-            echo "======================================"
-
-            cd /home/santoshbhai/madhubani-app
-
-            echo "Docker version:"
-            docker --version
-
-            echo "Docker Compose version:"
-            docker compose version
-
-            echo "Docker Compose configuration:"
-            docker compose config
- 
-            echo "Pulling the latest Docker images..."
-            docker compose pull
-
-            echo "Starting updated application..."
-            docker compose up -d --remove-orphans
-
-            echo "Removing unused Docker images..."
-            docker image prune -f
-
-            echo "Current container status:"
-            docker compose ps
-
-            echo "======================================"
-            echo "Deployment completed successfully"
-            echo "======================================"
+      # ------------------------------------------------------
+      # 1. CHECKOUT REPOSITORY
+      # ------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
 
+      # ------------------------------------------------------
+      # 2. SHOW RUNNER INFORMATION
+      # ------------------------------------------------------
+      - name: Verify deployment environment
+        shell: bash
+        run: |
+          set -e
+
+          echo "========================================"
+          echo "Deployment environment"
+          echo "========================================"
+
+          echo "Current user:"
+          whoami
+
+          echo ""
+          echo "Home directory:"
+          echo "$HOME"
+
+          echo ""
+          echo "Hostname:"
+          hostname
+
+          echo ""
+          echo "Operating system:"
+          uname -a
+
+          echo ""
+          echo "Docker version:"
+          docker --version
+
+          echo ""
+          echo "Docker Compose version:"
+          docker compose version
+
+          echo ""
+          echo "========================================"
+
+
+      # ------------------------------------------------------
+      # 3. VERIFY DOCKER ACCESS
+      # ------------------------------------------------------
+      - name: Verify Docker access
+        shell: bash
+        run: |
+          set -e
+
+          echo "Checking Docker daemon..."
+
+          docker ps
+
+          echo ""
+          echo "Docker access confirmed."
+
+
+      # ------------------------------------------------------
+      # 4. PREPARE APPLICATION DIRECTORY
+      # ------------------------------------------------------
+      #
+      # IMPORTANT:
+      #
+      # Do NOT use sudo here.
+      #
+      # GitHub Actions runs non-interactively, so sudo would
+      # ask for a password and fail with:
+      #
+      # sudo: a terminal is required to authenticate
+      #
+      # $HOME automatically points to the actual runner user.
+      #
+      # In your current runner it is:
+      #
+      # /home/santosh
+      #
+      # ------------------------------------------------------
+      - name: Prepare application directory
+        shell: bash
+        run: |
+          set -e
+
+          echo "Creating application directory..."
+
+          mkdir -p "$HOME/madhubani-app"
+
+          echo "Copying compose.yaml..."
+
+          cp compose.yaml \
+            "$HOME/madhubani-app/compose.yaml"
+
+          echo ""
+          echo "Application directory:"
+          ls -la "$HOME/madhubani-app"
+
+
+      # ------------------------------------------------------
+      # 5. VALIDATE DOCKER COMPOSE CONFIGURATION
+      # ------------------------------------------------------
+      - name: Validate Docker Compose configuration
+        shell: bash
+        run: |
+          set -e
+
+          cd "$HOME/madhubani-app"
+
+          echo "========================================"
+          echo "Docker Compose configuration"
+          echo "========================================"
+
+          docker compose config
+
+          echo ""
+          echo "Docker Compose configuration is valid."
+
+
+      # ------------------------------------------------------
+      # 6. LOGIN TO DOCKER HUB ON VM
+      # ------------------------------------------------------
+      #
+      # The VM needs to pull private Docker Hub images if
+      # the repositories are private.
+      #
+      # Using --password-stdin prevents the token from
+      # appearing directly in the command arguments.
+      #
+      # If your Docker Hub repositories are PUBLIC, this
+      # login is not strictly required for pulling images.
+      #
+      # ------------------------------------------------------
+      - name: Login to Docker Hub on Ubuntu VM
+        shell: bash
+        run: |
+          set -e
+
+          echo "Logging in to Docker Hub..."
+
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+            docker login \
+              --username "${{ secrets.DOCKERHUB_USERNAME }}" \
+              --password-stdin
+
+          echo "Docker Hub login successful."
+
+
+      # ------------------------------------------------------
+      # 7. PULL LATEST DOCKER IMAGES
+      # ------------------------------------------------------
+      - name: Pull latest Docker images
+        shell: bash
+        run: |
+          set -e
+
+          cd "$HOME/madhubani-app"
+
+          echo "========================================"
+          echo "Pulling latest Docker images"
+          echo "========================================"
+
+          docker compose pull
+
+          echo ""
+          echo "Docker images pulled successfully."
+
+
+      # ------------------------------------------------------
+      # 8. DEPLOY APPLICATION
+      # ------------------------------------------------------
+      - name: Deploy latest images
+        shell: bash
+        run: |
+          set -e
+
+          cd "$HOME/madhubani-app"
+
+          echo "======================================"
+          echo "Starting Madhubani deployment"
+          echo "======================================"
+
+          echo ""
+          echo "Starting updated application..."
+
+          docker compose up -d --remove-orphans
+
+          echo ""
+          echo "Application containers started."
+
+
+      # ------------------------------------------------------
+      # 9. SHOW CONTAINER STATUS
+      # ------------------------------------------------------
+      - name: Check container status
+        shell: bash
+        run: |
+          set -e
+
+          cd "$HOME/madhubani-app"
+
+          echo "========================================"
+          echo "Current container status"
+          echo "========================================"
+
+          docker compose ps
+
+          echo ""
+          echo "All Docker containers:"
+          docker ps
+
+
+      # ------------------------------------------------------
+      # 10. CLEAN UNUSED IMAGES
+      # ------------------------------------------------------
+      - name: Remove unused Docker images
+        shell: bash
+        run: |
+          set -e
+
+          echo "Removing unused Docker images..."
+
+          docker image prune -f
+
+          echo "Docker cleanup completed."
+
+
+      # ------------------------------------------------------
+      # 11. DEPLOYMENT SUMMARY
+      # ------------------------------------------------------
+      - name: Deployment summary
+        shell: bash
+        run: |
+          echo ""
+          echo "========================================"
+          echo "Madhubani deployment completed"
+          echo "========================================"
+
+          echo ""
+          echo "Runner:"
+          echo "santosh-vm"
+
+          echo ""
+          echo "Deployment directory:"
+          echo "$HOME/madhubani-app"
+
+          echo ""
+          echo "Frontend image:"
+          echo "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest"
+
+          echo ""
+          echo "Backend image:"
+          echo "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest"
+
+          echo ""
+          echo "Application status:"
+          docker compose -f "$HOME/madhubani-app/compose.yaml" ps
+
+          echo ""
+          echo "========================================"
+          echo "DEPLOYMENT SUCCESSFUL"
+          echo "========================================"
+
+
+
+
+
+
+          
     
     # ------------------------------------------------------
     # 5. deploying to ec2
