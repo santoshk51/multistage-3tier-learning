@@ -73,9 +73,8 @@ jobs:
   # ==========================================================
   sonarqube:
     name: SonarQube Analysis
-    runs-on: ubuntu-latest
+    runs-on: self-hosted        # <-- changed from ubuntu-latest
 
-    # SonarQube runs only when both validation jobs succeed.
     needs:
       - frontend-ci
       - backend-ci
@@ -84,8 +83,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # SonarQube requires complete Git history for
-          # accurate branch and blame information.
           fetch-depth: 0
 
       - name: Run SonarQube scan
