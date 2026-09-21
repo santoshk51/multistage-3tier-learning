@@ -380,9 +380,15 @@ jobs:
 
             cd /home/santoshbhai/madhubani-app
 
+            echo "Docker version:"
+            docker --version
+
+            echo "Docker Compose version:"
+            docker compose version
+
             echo "Docker Compose configuration:"
             docker compose config
-
+ 
             echo "Pulling the latest Docker images..."
             docker compose pull
 
