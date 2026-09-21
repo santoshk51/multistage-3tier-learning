@@ -326,6 +326,81 @@ jobs:
           echo "Trivy exit code: 0"
 
 
+
+ 
+    # ------------------------------------------------------
+    # 5. DEPLOYING TO UBUNTU VM
+    # ------------------------------------------------------
+  deploy-to-ubuntu-vm:
+      name: Deploy Application to Ubuntu VM
+
+      needs: docker-build-scan-and-push
+
+      # This job runs directly on your Ubuntu VM
+      # through the self-hosted GitHub Actions runner.
+      runs-on: self-hosted
+
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+      steps:
+
+        # ------------------------------------------------------
+        # 1. CHECKOUT REPOSITORY
+        # ------------------------------------------------------
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        # ------------------------------------------------------
+        # 2. PREPARE APPLICATION DIRECTORY
+        # ------------------------------------------------------
+        - name: Prepare application directory
+          run: |
+            set -e
+
+            echo "Creating application directory..."
+
+            sudo mkdir -p /home/santoshbhai/madhubani-app
+
+            sudo cp compose.yaml \
+              /home/santoshbhai/madhubani-app/compose.yaml
+
+            sudo chown -R santoshbhai:santoshbhai \
+              /home/santoshbhai/madhubani-app
+
+        # ------------------------------------------------------
+        # 3. DEPLOY LATEST DOCKER IMAGES
+        # ------------------------------------------------------
+        - name: Deploy latest images
+          run: |
+            set -e
+
+            echo "======================================"
+            echo "Starting Madhubani deployment"
+            echo "======================================"
+
+            cd /home/santoshbhai/madhubani-app
+
+            echo "Docker Compose configuration:"
+            docker compose config
+
+            echo "Pulling the latest Docker images..."
+            docker compose pull
+
+            echo "Starting updated application..."
+            docker compose up -d --remove-orphans
+
+            echo "Removing unused Docker images..."
+            docker image prune -f
+
+            echo "Current container status:"
+            docker compose ps
+
+            echo "======================================"
+            echo "Deployment completed successfully"
+            echo "======================================"
+
+
+    
     # ------------------------------------------------------
     # 5. deploying to ec2
     # ------------------------------------------------------   
