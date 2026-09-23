@@ -626,7 +626,85 @@ jobs:
 
 
 
+#***** for ec2 deployment ******************
+#***********************************
+#  deploy-to-ec2:
+#   name: Deploy Application to AWS EC2
 
+#   needs:
+#     - docker-build-scan-and-push
+
+#   runs-on: ubuntu-latest
+
+#   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+#   steps:
+
+#     - name: Checkout repository
+#       uses: actions/checkout@v4
+
+#     - name: Configure SSH
+#       shell: bash
+#       run: |
+#         set -e
+
+#         mkdir -p ~/.ssh
+#         chmod 700 ~/.ssh
+
+#         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key
+#         chmod 600 ~/.ssh/ec2_key
+
+#         ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+#     - name: Prepare application directory
+#       shell: bash
+#       run: |
+#         set -e
+
+#         ssh \
+#           -i ~/.ssh/ec2_key \
+#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
+#           "mkdir -p /home/${{ secrets.EC2_USERNAME }}/madhubani-app"
+
+#     - name: Copy compose file to EC2
+#       shell: bash
+#       run: |
+#         set -e
+
+#         scp \
+#           -i ~/.ssh/ec2_key \
+#           compose.yaml \
+#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/madhubani-app/compose.yaml"
+
+#     - name: Login to Docker Hub on EC2
+#       shell: bash
+#       run: |
+#         set -e
+
+#         ssh \
+#           -i ~/.ssh/ec2_key \
+#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
+#           "echo '${{ secrets.DOCKERHUB_TOKEN }}' | docker login --username '${{ secrets.DOCKERHUB_USERNAME }}' --password-stdin"
+
+#     - name: Deploy application on EC2
+#       shell: bash
+#       run: |
+#         set -e
+
+#         ssh \
+#           -i ~/.ssh/ec2_key \
+#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
+#           "cd /home/${{ secrets.EC2_USERNAME }}/madhubani-app && docker compose pull && docker compose up -d --remove-orphans"
+
+#     - name: Check EC2 deployment
+#       shell: bash
+#       run: |
+#         set -e
+
+#         ssh \
+#           -i ~/.ssh/ec2_key \
+#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
+#           "cd /home/${{ secrets.EC2_USERNAME }}/madhubani-app && docker compose ps"
 
     
     # ------------------------------------------------------

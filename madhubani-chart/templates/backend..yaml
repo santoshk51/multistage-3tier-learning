@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Release.Name }}-backend" # Quotes prevent VS Code YAML parsing errors
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: {{ .Values.backend.image }}
+        ports:
+        - containerPort: {{ .Values.backend.port }}
+        env:
+        - name: DB_HOST
+          value: "{{ .Release.Name }}-mysql"
+        - name: DB_USER
+          value: {{ .Values.mysql.user | quote }}
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.mysql.existingSecret }} # Pulls password from your external k8s secret
+              key: mysql-password
+        - name: DB_NAME
+          value: {{ .Values.mysql.database | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{ .Release.Name }}-backend"
+spec:
+  ports:
+  - port: {{ .Values.backend.port }}
+  selector:
+    app: backend
