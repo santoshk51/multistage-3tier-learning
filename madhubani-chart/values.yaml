@@ -36,15 +36,11 @@ mysql:
   user: "madhubani_user"
   port: 3306
   existingSecret: "madhubani-db-secret" # The k8s secret you just created
-
 backend:
-  image: santosh051/madhubani-backend:latest
+  image: santosh051/madhubani-backend:d2da6b552256e6fff9159c406ca2c6954c7a796c
   replicas: 2
   port: 3000
-
 frontend:
-  image: santosh051/madhubani-frontend:latest
+  image: santosh051/madhubani-frontend:d2da6b552256e6fff9159c406ca2c6954c7a796c
   replicas: 2
   port: 80
-
-  
