@@ -46,3 +46,5 @@ frontend:
   image: santosh051/madhubani-frontend:latest
   replicas: 2
   port: 80
+
+  
