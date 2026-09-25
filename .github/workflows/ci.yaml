@@ -9,6 +9,8 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write   # needed so the update-k8s-chart job can commit values.yaml back
 
 jobs:
 
@@ -623,241 +625,57 @@ jobs:
           echo "========================================"
 
 
-
-
-
-#***** for ec2 deployment ******************
-#***********************************
-#  deploy-to-ec2:
-#   name: Deploy Application to AWS EC2
-
-#   needs:
-#     - docker-build-scan-and-push
-
-#   runs-on: ubuntu-latest
-
-#   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-#   steps:
-
-#     - name: Checkout repository
-#       uses: actions/checkout@v4
-
-#     - name: Configure SSH
-#       shell: bash
-#       run: |
-#         set -e
-
-#         mkdir -p ~/.ssh
-#         chmod 700 ~/.ssh
-
-#         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key
-#         chmod 600 ~/.ssh/ec2_key
-
-#         ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
-
-#     - name: Prepare application directory
-#       shell: bash
-#       run: |
-#         set -e
-
-#         ssh \
-#           -i ~/.ssh/ec2_key \
-#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
-#           "mkdir -p /home/${{ secrets.EC2_USERNAME }}/madhubani-app"
-
-#     - name: Copy compose file to EC2
-#       shell: bash
-#       run: |
-#         set -e
-
-#         scp \
-#           -i ~/.ssh/ec2_key \
-#           compose.yaml \
-#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/madhubani-app/compose.yaml"
-
-#     - name: Login to Docker Hub on EC2
-#       shell: bash
-#       run: |
-#         set -e
-
-#         ssh \
-#           -i ~/.ssh/ec2_key \
-#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
-#           "echo '${{ secrets.DOCKERHUB_TOKEN }}' | docker login --username '${{ secrets.DOCKERHUB_USERNAME }}' --password-stdin"
-
-#     - name: Deploy application on EC2
-#       shell: bash
-#       run: |
-#         set -e
-
-#         ssh \
-#           -i ~/.ssh/ec2_key \
-#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
-#           "cd /home/${{ secrets.EC2_USERNAME }}/madhubani-app && docker compose pull && docker compose up -d --remove-orphans"
-
-#     - name: Check EC2 deployment
-#       shell: bash
-#       run: |
-#         set -e
-
-#         ssh \
-#           -i ~/.ssh/ec2_key \
-#           "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
-#           "cd /home/${{ secrets.EC2_USERNAME }}/madhubani-app && docker compose ps"
-
-    
-    # ------------------------------------------------------
-    # 5. deploying to ec2
-    # ------------------------------------------------------   
-  # deploy-to-ec2:
-  #   name: Deploy Application to EC2
-
-  #   needs: docker-build-scan-and-push
-
-  #   runs-on: ubuntu-latest
-
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-  #   steps:
-
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-
-  #     - name: Copy docker-compose.yml to EC2
-  #       uses: appleboy/scp-action@v0.1.7
-  #       with:
-  #         host: ${{ secrets.EC2_HOST }}
-  #         username: ${{ secrets.EC2_USERNAME }}
-  #         key: ${{ secrets.EC2_SSH_KEY }}
-  #         port: 22
-  #         source: "compose.yaml"
-  #         target: "/home/ubuntu/madhubani-app"
-
-  #     - name: Deploy latest images to EC2
-  #       uses: appleboy/ssh-action@v1.2.5
-  #       with:
-  #         host: ${{ secrets.EC2_HOST }}
-  #         username: ${{ secrets.EC2_USERNAME }}
-  #         key: ${{ secrets.EC2_SSH_KEY }}
-  #         port: 22
-
-  #         script: |
-  #           set -e
-
-  #           echo "======================================"
-  #           echo "Starting Madhubani deployment"
-  #           echo "======================================"
-
-  #           cd /home/ubuntu/madhubani-app
-
-  #           echo "Docker Compose configuration:"
-  #           docker compose config
-
-  #           echo "Pulling the latest Docker images..."
-  #           docker compose pull
-
-  #           echo "Starting updated application..."
-  #           docker compose up -d --remove-orphans
-
-  #           echo "Removing unused Docker images..."
-  #           docker image prune -f
-
-  #           echo "Current container status:"
-  #           docker compose ps
-
-  #           echo "======================================"
-  #           echo "Deployment completed successfully"
-  #           echo "======================================"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  # docker-build-and-push:
-  #   name: Build and Push Docker Images
-  #   runs-on: ubuntu-latest
-
-  #   needs: owasp-dependency-check
-  #     # - frontend-ci
-  #     # - backend-ci
-        
-
-  #   steps:
-  #     - name: Checkout source code
-  #       uses: actions/checkout@v4
-
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v3
-
-  #     - name: Log in to Docker Hub
-  #       uses: docker/login-action@v4
-  #       with:
-  #         username: ${{ secrets.DOCKERHUB_USERNAME }}
-  #         password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  #     - name: Build and push frontend image
-  #       uses: docker/build-push-action@v6
-  #       with:
-  #         context: ./frontend # ***
-  #         file: ./frontend/Dockerfile # ***
-  #         push: true
-  #         tags: |
-  #           ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
-  #           ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:latest
-  #         cache-from: type=gha
-  #         cache-to: type=gha,mode=max
-
-  #     - name: Build and push backend image
-  #       uses: docker/build-push-action@v6
-  #       with:
-  #         context: ./backend
-  #         file: ./backend/Dockerfile
-  #         push: true
-  #         tags: |
-  #           ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
-  #           ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:latest
-  #         cache-from: type=gha
-  #         cache-to: type=gha,mode=max
-  
-  
-  # # deploy:
-  # #   runs-on: ubuntu-latest
-
-  # #   steps:
-  # #     - name: Checkout code
-  # #       uses: actions/checkout@v4
-
-  # #     - name: Deploy via SSH
-  # #       uses: appleboy/ssh-action@v1.0.3
-  # #       with:
-  # #        host: ${{ secrets.SSH_HOST }}
-  # #        username: ubuntu
-  # #        key: ${{ secrets.SSH_KEY }}
-  # #        script: |
-  # #           cd /home/ubuntu/node
-  # #           git pull origin main
-  # #           npm install
-  # #           npm run build
-  # #           pm2 restart all
+  # ==========================================================
+  # 6. UPDATE K8S HELM CHART FOR ARGOCD (NEW)
+  # ==========================================================
+  #
+  # This job does NOT rebuild or re-push images.
+  # docker-build-scan-and-push already pushed:
+  #   ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
+  #   ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
+  #
+  # This job just points madhubani-chart/values.yaml at those
+  # exact tags and commits the change back to main. ArgoCD's
+  # automated sync then picks up the diff and redeploys to k8s.
+  #
+  # ==========================================================
+  update-k8s-chart:
+    name: Update Helm chart image tags for ArgoCD
+
+    needs:
+      - docker-build-scan-and-push
+
+    runs-on: ubuntu-latest
+
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update image tags in values.yaml
+        run: |
+          yq -i '.backend.image = "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"' madhubani-chart/values.yaml
+          yq -i '.frontend.image = "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"' madhubani-chart/values.yaml
+
+      - name: Commit & push updated values.yaml
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add madhubani-chart/values.yaml
+
+          git commit -m "chore: deploy image ${{ github.sha }} to k8s [skip ci]" || echo "No changes to commit"
+
+          git pull --rebase origin main
+          git push
