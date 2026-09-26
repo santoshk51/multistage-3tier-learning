@@ -9,8 +9,14 @@ on:
     branches:
       - main
 
+
+# ==========================================================
+# GITHUB ACTIONS PERMISSIONS
+# ==========================================================
 permissions:
-  contents: write   # needed so the update-k8s-chart job can commit values.yaml back
+  contents: write
+  actions: read
+
 
 jobs:
 
@@ -23,9 +29,16 @@ jobs:
 
     steps:
 
+      # ------------------------------------------------------
+      # CHECKOUT SOURCE CODE
+      # ------------------------------------------------------
       - name: Checkout source code
         uses: actions/checkout@v4
 
+
+      # ------------------------------------------------------
+      # VERIFY REQUIRED FRONTEND FILES
+      # ------------------------------------------------------
       - name: Verify frontend files
         run: |
           set -e
@@ -38,13 +51,18 @@ jobs:
 
           echo "All required frontend files are present."
 
+
+      # ------------------------------------------------------
+      # CHECK FRONTEND JAVASCRIPT SYNTAX
+      # ------------------------------------------------------
       - name: Check frontend JavaScript syntax
         run: |
           node --check frontend/app.js
 
 
+
   # ==========================================================
-  # 2. BACKEND VALIDATION
+  # 2. BACKEND VALIDATION + TEST + COVERAGE
   # ==========================================================
   backend-ci:
     name: Backend chal raha hai
@@ -56,9 +74,16 @@ jobs:
 
     steps:
 
+      # ------------------------------------------------------
+      # CHECKOUT SOURCE CODE
+      # ------------------------------------------------------
       - name: Checkout source code
         uses: actions/checkout@v4
 
+
+      # ------------------------------------------------------
+      # SET UP NODE.JS
+      # ------------------------------------------------------
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -66,13 +91,85 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
+
+      # ------------------------------------------------------
+      # INSTALL BACKEND DEPENDENCIES
+      # ------------------------------------------------------
       - name: Install backend dependencies
         run: |
           npm ci
 
+
+      # ------------------------------------------------------
+      # CHECK BACKEND JAVASCRIPT SYNTAX
+      # ------------------------------------------------------
       - name: Check backend JavaScript syntax
         run: |
           node --check server.js
+
+
+      # ------------------------------------------------------
+      # RUN JEST TESTS WITH COVERAGE
+      # ------------------------------------------------------
+      #
+      # This command:
+      #
+      # 1. Runs all backend tests
+      # 2. Generates coverage information
+      # 3. Creates:
+      #
+      #    backend/coverage/lcov.info
+      #
+      # SonarQube will later read this file.
+      #
+      # ------------------------------------------------------
+      - name: Run backend tests with coverage
+        run: |
+          npm run test:coverage
+
+
+      # ------------------------------------------------------
+      # VERIFY COVERAGE REPORT
+      # ------------------------------------------------------
+      #
+      # We explicitly check that lcov.info exists.
+      #
+      # If this file does not exist, the CI job fails here
+      # instead of allowing SonarQube to run without coverage.
+      #
+      # ------------------------------------------------------
+      - name: Verify coverage report
+        run: |
+          set -e
+
+          test -f coverage/lcov.info
+
+          echo "========================================"
+          echo "Coverage report found"
+          echo "========================================"
+
+          ls -lh coverage/lcov.info
+
+
+      # ------------------------------------------------------
+      # UPLOAD COVERAGE AS GITHUB ACTIONS ARTIFACT
+      # ------------------------------------------------------
+      #
+      # backend-ci and sonarqube are separate jobs.
+      #
+      # Files created in backend-ci are NOT automatically
+      # available inside the SonarQube job.
+      #
+      # Therefore we upload lcov.info as an artifact.
+      #
+      # ------------------------------------------------------
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage/lcov.info
+          if-no-files-found: error
+
 
 
   # ==========================================================
@@ -81,32 +178,98 @@ jobs:
   sonarqube:
     name: SonarQube Analysis
 
-    # Runs on the Ubuntu VM self-hosted runner
+    # --------------------------------------------------------
+    # Use your Ubuntu VM self-hosted runner.
+    # --------------------------------------------------------
     runs-on: self-hosted
 
+    # --------------------------------------------------------
+    # SonarQube starts only after frontend and backend
+    # validation has completed successfully.
+    # --------------------------------------------------------
     needs:
       - frontend-ci
       - backend-ci
 
     steps:
 
+      # ------------------------------------------------------
+      # CHECKOUT SOURCE CODE
+      # ------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+
+      # ------------------------------------------------------
+      # DOWNLOAD BACKEND COVERAGE
+      # ------------------------------------------------------
+      #
+      # backend-ci uploaded:
+      #
+      # backend/coverage/lcov.info
+      #
+      # We now download that artifact into the same path.
+      #
+      # ------------------------------------------------------
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage
+
+
+      # ------------------------------------------------------
+      # VERIFY DOWNLOADED COVERAGE
+      # ------------------------------------------------------
+      #
+      # This confirms that the SonarQube runner actually has
+      # the coverage file before the scanner starts.
+      #
+      # ------------------------------------------------------
+      - name: Verify downloaded coverage
+        shell: bash
+        run: |
+          set -e
+
+          echo "========================================"
+          echo "Checking SonarQube coverage report"
+          echo "========================================"
+
+          test -f backend/coverage/lcov.info
+
+          ls -lh backend/coverage/lcov.info
+
+          echo ""
+          echo "Coverage report is available to SonarQube."
+
+
+      # ------------------------------------------------------
+      # RUN SONARQUBE SCAN
+      # ------------------------------------------------------
       - name: Run SonarQube scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
+
+      # ------------------------------------------------------
+      # CHECK SONARQUBE QUALITY GATE
+      # ------------------------------------------------------
+      #
+      # The pipeline waits for SonarQube to calculate the
+      # Quality Gate result.
+      #
+      # ------------------------------------------------------
       - name: Check SonarQube Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
 
 
   # ==========================================================
@@ -117,32 +280,36 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # --------------------------------------------------------
+    # Docker images are built only after SonarQube passes.
+    # --------------------------------------------------------
     needs:
       - sonarqube
 
-    # Only build and push Docker images on pushes to main.
-    # Pull requests will run frontend/backend/SonarQube validation
-    # but will not push images to Docker Hub.
+    # --------------------------------------------------------
+    # Only push images when the event is a push to main.
+    # Pull requests do not push images.
+    # --------------------------------------------------------
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
 
       # ------------------------------------------------------
-      # 1. CHECKOUT REPOSITORY
+      # CHECKOUT SOURCE CODE
       # ------------------------------------------------------
       - name: Checkout source code
         uses: actions/checkout@v4
 
 
       # ------------------------------------------------------
-      # 2. SET UP DOCKER BUILDX
+      # SET UP DOCKER BUILDX
       # ------------------------------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
 
       # ------------------------------------------------------
-      # 3. LOGIN TO DOCKER HUB
+      # LOGIN TO DOCKER HUB
       # ------------------------------------------------------
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
@@ -152,7 +319,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 4. BUILD FRONTEND IMAGE
+      # BUILD FRONTEND IMAGE
       # ------------------------------------------------------
       - name: Build frontend image locally
         uses: docker/build-push-action@v6
@@ -175,7 +342,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 5. BUILD BACKEND IMAGE
+      # BUILD BACKEND IMAGE
       # ------------------------------------------------------
       - name: Build backend image locally
         uses: docker/build-push-action@v6
@@ -198,7 +365,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 6. VERIFY LOCALLY BUILT IMAGES
+      # VERIFY LOCALLY BUILT IMAGES
       # ------------------------------------------------------
       - name: Verify locally built images
         shell: bash
@@ -231,7 +398,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 7. TRIVY FRONTEND IMAGE SCAN
+      # TRIVY FRONTEND IMAGE SCAN
       # ------------------------------------------------------
       - name: Scan frontend image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
@@ -244,12 +411,13 @@ jobs:
           format: table
 
           # Learning mode:
-          # vulnerabilities are displayed but do not stop pipeline.
+          # vulnerabilities are displayed but do not stop
+          # the pipeline.
           exit-code: "0"
 
 
       # ------------------------------------------------------
-      # 8. TRIVY BACKEND IMAGE SCAN
+      # TRIVY BACKEND IMAGE SCAN
       # ------------------------------------------------------
       - name: Scan backend image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
@@ -264,7 +432,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 9. PUSH FRONTEND IMAGE
+      # PUSH FRONTEND IMAGE
       # ------------------------------------------------------
       - name: Push frontend image to Docker Hub
         shell: bash
@@ -283,7 +451,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 10. PUSH BACKEND IMAGE
+      # PUSH BACKEND IMAGE
       # ------------------------------------------------------
       - name: Push backend image to Docker Hub
         shell: bash
@@ -302,7 +470,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 11. PIPELINE SUMMARY
+      # PIPELINE SUMMARY
       # ------------------------------------------------------
       - name: Print Docker pipeline summary
         shell: bash
@@ -324,28 +492,9 @@ jobs:
           echo "Trivy exit code: 0"
 
 
+
   # ==========================================================
   # 5. DEPLOY TO UBUNTU VM
-  # ==========================================================
-  #
-  # IMPORTANT:
-  #
-  # This job runs directly inside your Ubuntu VM because
-  # the VM has the GitHub Actions self-hosted runner.
-  #
-  # There is NO SSH.
-  # There is NO SCP.
-  # There is NO EC2_HOST.
-  # There is NO EC2_SSH_KEY.
-  #
-  # The runner user is "santosh", as shown by your
-  # GitHub Actions runner path:
-  #
-  # /home/santosh/actions-runner/
-  #
-  # Therefore $HOME is used instead of hard-coding
-  # /home/santoshbhai.
-  #
   # ==========================================================
   deploy-to-ubuntu-vm:
     name: Deploy Application to Ubuntu VM
@@ -360,14 +509,14 @@ jobs:
     steps:
 
       # ------------------------------------------------------
-      # 1. CHECKOUT REPOSITORY
+      # CHECKOUT REPOSITORY
       # ------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
       # ------------------------------------------------------
-      # 2. SHOW RUNNER INFORMATION
+      # SHOW RUNNER INFORMATION
       # ------------------------------------------------------
       - name: Verify deployment environment
         shell: bash
@@ -406,7 +555,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 3. VERIFY DOCKER ACCESS
+      # VERIFY DOCKER ACCESS
       # ------------------------------------------------------
       - name: Verify Docker access
         shell: bash
@@ -422,24 +571,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 4. PREPARE APPLICATION DIRECTORY
-      # ------------------------------------------------------
-      #
-      # IMPORTANT:
-      #
-      # Do NOT use sudo here.
-      #
-      # GitHub Actions runs non-interactively, so sudo would
-      # ask for a password and fail with:
-      #
-      # sudo: a terminal is required to authenticate
-      #
-      # $HOME automatically points to the actual runner user.
-      #
-      # In your current runner it is:
-      #
-      # /home/santosh
-      #
+      # PREPARE APPLICATION DIRECTORY
       # ------------------------------------------------------
       - name: Prepare application directory
         shell: bash
@@ -457,11 +589,12 @@ jobs:
 
           echo ""
           echo "Application directory:"
+
           ls -la "$HOME/madhubani-app"
 
 
       # ------------------------------------------------------
-      # 5. VALIDATE DOCKER COMPOSE CONFIGURATION
+      # VALIDATE DOCKER COMPOSE CONFIGURATION
       # ------------------------------------------------------
       - name: Validate Docker Compose configuration
         shell: bash
@@ -481,18 +614,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 6. LOGIN TO DOCKER HUB ON VM
-      # ------------------------------------------------------
-      #
-      # The VM needs to pull private Docker Hub images if
-      # the repositories are private.
-      #
-      # Using --password-stdin prevents the token from
-      # appearing directly in the command arguments.
-      #
-      # If your Docker Hub repositories are PUBLIC, this
-      # login is not strictly required for pulling images.
-      #
+      # LOGIN TO DOCKER HUB ON VM
       # ------------------------------------------------------
       - name: Login to Docker Hub on Ubuntu VM
         shell: bash
@@ -510,7 +632,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 7. PULL LATEST DOCKER IMAGES
+      # PULL LATEST DOCKER IMAGES
       # ------------------------------------------------------
       - name: Pull latest Docker images
         shell: bash
@@ -530,7 +652,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 8. DEPLOY APPLICATION
+      # DEPLOY APPLICATION
       # ------------------------------------------------------
       - name: Deploy latest images
         shell: bash
@@ -553,7 +675,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 9. SHOW CONTAINER STATUS
+      # SHOW CONTAINER STATUS
       # ------------------------------------------------------
       - name: Check container status
         shell: bash
@@ -570,11 +692,12 @@ jobs:
 
           echo ""
           echo "All Docker containers:"
+
           docker ps
 
 
       # ------------------------------------------------------
-      # 10. CLEAN UNUSED IMAGES
+      # CLEAN UNUSED IMAGES
       # ------------------------------------------------------
       - name: Remove unused Docker images
         shell: bash
@@ -589,7 +712,7 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 11. DEPLOYMENT SUMMARY
+      # DEPLOYMENT SUMMARY
       # ------------------------------------------------------
       - name: Deployment summary
         shell: bash
@@ -617,7 +740,10 @@ jobs:
 
           echo ""
           echo "Application status:"
-          docker compose -f "$HOME/madhubani-app/compose.yaml" ps
+
+          docker compose \
+            -f "$HOME/madhubani-app/compose.yaml" \
+            ps
 
           echo ""
           echo "========================================"
@@ -625,19 +751,9 @@ jobs:
           echo "========================================"
 
 
+
   # ==========================================================
-  # 6. UPDATE K8S HELM CHART FOR ARGOCD (NEW)
-  # ==========================================================
-  #
-  # This job does NOT rebuild or re-push images.
-  # docker-build-scan-and-push already pushed:
-  #   ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}
-  #   ${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}
-  #
-  # This job just points madhubani-chart/values.yaml at those
-  # exact tags and commits the change back to main. ArgoCD's
-  # automated sync then picks up the diff and redeploys to k8s.
-  #
+  # 6. UPDATE K8S HELM CHART FOR ARGOCD
   # ==========================================================
   update-k8s-chart:
     name: Update Helm chart image tags for ArgoCD
@@ -651,21 +767,43 @@ jobs:
 
     steps:
 
+      # ------------------------------------------------------
+      # CHECKOUT REPOSITORY
+      # ------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+
+      # ------------------------------------------------------
+      # INSTALL YQ
+      # ------------------------------------------------------
       - name: Install yq
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+
           sudo chmod +x /usr/local/bin/yq
 
+
+      # ------------------------------------------------------
+      # UPDATE IMAGE TAGS
+      # ------------------------------------------------------
       - name: Update image tags in values.yaml
         run: |
-          yq -i '.backend.image = "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"' madhubani-chart/values.yaml
-          yq -i '.frontend.image = "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"' madhubani-chart/values.yaml
+          yq -i \
+            '.backend.image = "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-backend:${{ github.sha }}"' \
+            madhubani-chart/values.yaml
 
+          yq -i \
+            '.frontend.image = "${{ secrets.DOCKERHUB_USERNAME }}/madhubani-frontend:${{ github.sha }}"' \
+            madhubani-chart/values.yaml
+
+
+      # ------------------------------------------------------
+      # COMMIT AND PUSH UPDATED HELM VALUES
+      # ------------------------------------------------------
       - name: Commit & push updated values.yaml
         run: |
           set -e
@@ -675,7 +813,10 @@ jobs:
 
           git add madhubani-chart/values.yaml
 
-          git commit -m "chore: deploy image ${{ github.sha }} to k8s [skip ci]" || echo "No changes to commit"
+          git commit \
+            -m "chore: deploy image ${{ github.sha }} to k8s [skip ci]" \
+            || echo "No changes to commit"
 
           git pull --rebase origin main
+
           git push
