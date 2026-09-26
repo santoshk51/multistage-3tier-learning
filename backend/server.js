@@ -214,5 +214,9 @@ async function start() {
 // START APPLICATION
 // ============================================================
 
-start();
+if (process.env.NODE_ENV !== 'test') {
+  start();
+}
+
+export { app, pool, initialiseDatabase };
 
