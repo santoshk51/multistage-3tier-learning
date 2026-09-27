@@ -4,12 +4,10 @@ mysql:
   user: "madhubani_user"
   port: 3306
   existingSecret: "madhubani-db-secret"
-
 backend:
-  image: santosh051/madhubani-backend:ccc83be154a79c14df2baf2257ba439706aed8a7
+  image: santosh051/madhubani-backend:9ce27e187b4dc9aad11fdc63b801e02459e46624
   replicas: 2
   port: 3000
-
   resources:
     requests:
       cpu: "100m"
@@ -17,18 +15,15 @@ backend:
     limits:
       cpu: "500m"
       memory: "256Mi"
-
   autoscaling:
     enabled: true
     minReplicas: 2
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
-
 frontend:
-  image: santosh051/madhubani-frontend:ccc83be154a79c14df2baf2257ba439706aed8a7
+  image: santosh051/madhubani-frontend:9ce27e187b4dc9aad11fdc63b801e02459e46624
   replicas: 2
   port: 80
-
   resources:
     requests:
       cpu: "100m"
@@ -36,7 +31,6 @@ frontend:
     limits:
       cpu: "500m"
       memory: "256Mi"
-
   autoscaling:
     enabled: true
     minReplicas: 2
