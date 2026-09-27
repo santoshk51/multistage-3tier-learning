@@ -6,7 +6,7 @@ mysql:
   port: 3306
   existingSecret: "madhubani-db-secret" # The k8s secret you just created
 backend:
-  image: santosh051/madhubani-backend:51fe64e9215df53f083f24eb8291f6f5ec611170
+  image: santosh051/madhubani-backend:1dd24e2336215d2dd6dff63f3ce221e57fe498fc
   port: 3000
   autoscaling:
     enabled: true
@@ -14,7 +14,7 @@ backend:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
 frontend:
-  image: santosh051/madhubani-frontend:51fe64e9215df53f083f24eb8291f6f5ec611170
+  image: santosh051/madhubani-frontend:1dd24e2336215d2dd6dff63f3ce221e57fe498fc
   port: 80
   autoscaling:
     enabled: true
