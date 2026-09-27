@@ -1,46 +1,44 @@
-# # MySQL Database ni configuration values
-# mysql:
-#   image: mysql:8.0 # MySQL nu official Docker image
-#   mysql:
-#   image: mysql:8.0
-#   database: "madhubani_db"
-#   user: "madhubani_user"
-#   port: 3306
-#   existingSecret: "madhubani-db-secret" # The k8s secret you just created
-
-# backend:
-#   image: your-dockerhub-username/madhubani-backend:latest
-#   replicas: 2
-#   port: 3000
-
-# frontend:
-#   image: your-dockerhub-username/madhubani-frontend:latest
-#   replicas: 2
-#   port: 80
-
-# # Node.js Backend ni configuration values
-# backend:
-#   image: santosh051/madhubani-backend:latest # Tmara backend nu Docker image (Aa naam tmara Docker Hub pramane badli nakhjo)
-#   replicas: 2 # High availability mate backend na 2 pods (containers) run thase
-#   port: 3000 # Node.js server no port
-
-# # Frontend ni configuration values
-# frontend:
-#   image: santosh051/madhubani-frontend:latest # Tmara frontend nu Docker image
-#   replicas: 2 # Frontend na 2 pods run thase
-#   port: 80 # Frontend server (Nginx/Apache) no port
-
 mysql:
   image: mysql:8.0
   database: "madhubani_db"
   user: "madhubani_user"
   port: 3306
-  existingSecret: "madhubani-db-secret" # The k8s secret you just created
+  existingSecret: "madhubani-db-secret"
+
 backend:
   image: santosh051/madhubani-backend:ccc83be154a79c14df2baf2257ba439706aed8a7
   replicas: 2
   port: 3000
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
 frontend:
   image: santosh051/madhubani-frontend:ccc83be154a79c14df2baf2257ba439706aed8a7
   replicas: 2
   port: 80
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70

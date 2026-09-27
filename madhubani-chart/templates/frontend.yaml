@@ -17,6 +17,13 @@ spec:
         image: {{ .Values.frontend.image }}
         ports:
         - containerPort: {{ .Values.frontend.port }}
+        resources:
+          requests:
+            cpu: {{ .Values.frontend.resources.requests.cpu | quote }}
+            memory: {{ .Values.frontend.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.frontend.resources.limits.cpu | quote }}
+            memory: {{ .Values.frontend.resources.limits.memory | quote }}
         env:
         - name: BACKEND_URL
           value: "http://{{ .Release.Name }}-backend:{{ .Values.backend.port }}"

@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "{{ .Release.Name }}-backend" # Quotes prevent VS Code YAML parsing errors
+  name: "{{ .Release.Name }}-backend"
 spec:
   replicas: {{ .Values.backend.replicas }}
   selector:
@@ -17,6 +17,15 @@ spec:
         image: {{ .Values.backend.image }}
         ports:
         - containerPort: {{ .Values.backend.port }}
+
+        resources:
+          requests:
+            cpu: {{ .Values.backend.resources.requests.cpu | quote }}
+            memory: {{ .Values.backend.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.backend.resources.limits.cpu | quote }}
+            memory: {{ .Values.backend.resources.limits.memory | quote }}
+
         env:
         - name: DB_HOST
           value: "{{ .Release.Name }}-mysql"
@@ -25,7 +34,7 @@ spec:
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ .Values.mysql.existingSecret }} # Pulls password from your external k8s secret
+              name: {{ .Values.mysql.existingSecret }}
               key: mysql-password
         - name: DB_NAME
           value: {{ .Values.mysql.database | quote }}
