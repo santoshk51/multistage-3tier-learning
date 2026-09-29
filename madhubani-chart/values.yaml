@@ -8,6 +8,17 @@ mysql:
 backend:
   image: santosh051/madhubani-backend:51fe64e9215df53f083f24eb8291f6f5ec611170
   port: 3000
+
+  replicas: 2
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
   autoscaling:
     enabled: true
     minReplicas: 2
@@ -16,6 +27,17 @@ backend:
 frontend:
   image: santosh051/madhubani-frontend:51fe64e9215df53f083f24eb8291f6f5ec611170
   port: 80
+
+  replicas: 2
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
   autoscaling:
     enabled: true
     minReplicas: 2
