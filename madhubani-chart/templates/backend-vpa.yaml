@@ -1,8 +1,10 @@
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
+
 metadata:
   name: madhubani-backend-vpa
   namespace: madhubani
+
 spec:
   targetRef:
     apiVersion: apps/v1
@@ -24,4 +26,3 @@ spec:
         maxAllowed:
           cpu: 1
           memory: 1Gi
-		  
